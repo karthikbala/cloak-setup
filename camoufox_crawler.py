@@ -7,13 +7,22 @@ machine handles). Use it when you need concurrency or don't want a vendor key;
 use the CloakBrowser template (mini_crawler.py) when you want the strongest
 single-browser stealth on Chromium.
 
+Verified against CanLII/DataDome 2026-11-11, same sticky DataImpulse session as
+the CloakBrowser runs: probe wall self-cleared in ~8s, then 3/3 documents at
+200 with no mid-run walls at all.
+
 Setup (once per server):
     sudo ./cloak_setup.sh            # system deps + fonts
     pip install 'camoufox[geoip]'    # or: /opt/cloak/venv/bin/pip install ...
     camoufox fetch                   # downloads the Firefox binary (~150 MB)
-    python3 -m playwright install-deps firefox
+    /opt/cloak/venv/bin/python -m playwright install-deps firefox
 
 Run:  DATAIMPULSE_USER=... DATAIMPULSE_PASS=... python3 camoufox_crawler.py
+
+Note on the LeakWarning you may see at launch: with geoip=True the identity
+claims another OS/GPU than the host, so Camoufox randomizes canvas and WebGL
+readbacks (the browser reads as a privacy-hardened Firefox). That is intended
+here and passed DataDome as-is; do not "fix" it with canvas_noise=False.
 """
 
 import hashlib

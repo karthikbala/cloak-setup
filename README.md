@@ -9,7 +9,7 @@ is something that broke once and was fixed.
 |---|---|
 | `cloak_setup.sh` | One-command installer for a fresh Ubuntu/Debian server. Idempotent. |
 | `mini_crawler.py` | CloakBrowser template: probe → self-clear → fetch → store → resume. Strongest single-browser stealth; needs a (free) key. |
-| `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit, concurrency free. |
+| `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit. **Verified live vs CanLII/DataDome 2026-11-11**: wall self-cleared in ~8s, 3/3 documents, zero mid-run walls. |
 | `AGENTS.md` | **For coding agents**: the rules that keep a crawler unblocked. Read before writing code here. |
 
 ## Quickstart on a new server
@@ -54,6 +54,20 @@ both — that is where the blocking game is actually decided.
    IP. Capped recoveries per run; a wall that never clears means stop.
 5. **Quit the browser cleanly.** A killed browser holds its licence seat for
    ~4 minutes; one concurrent browser per licence.
+
+## Engine notes (measured)
+
+- **Camoufox passed DataDome on the first try** (CanLII, 2026-11-11, the same
+  sticky session the CloakBrowser runs used): probe wall self-cleared in ~8s,
+  3/3 documents at 200, zero mid-run walls — where CloakBrowser hit walls
+  mid-run on the identical session. Launch config that passed: `headless=True,
+  geoip=True, humanize=True` + the sticky proxy. Keep the canvas/WebGL noise
+  the `LeakWarning` tells you about — it is intended and passed as-is.
+- **CloakBrowser** hit mid-run walls on the same session that Camoufox did
+  not; both cleared by waiting. Prefer Camoufox as the default engine; keep
+  CloakBrowser for targets that specifically defeat Firefox fingerprints.
+- **DataDome blocks are mostly IP reputation** (their maintainers say the
+  same): one known-good sticky session beats everything else you can tune.
 
 ## What does NOT work (measured 2026-11-10/11)
 

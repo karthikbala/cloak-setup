@@ -28,8 +28,21 @@ was learned by breaking. When you write or modify a crawler here:
   fresh random one per run: IP reputation accrues to the session, and a
   known-good session is the single most valuable runtime asset. Credentials
   come from the environment or a root-600 secrets file — never hardcode them.
-- Match locale/timezone to the proxy's country (`geoip=True`, or set them
-  explicitly as the template does).
+- Match locale/timezone to the proxy's country. On Camoufox use `geoip=True`
+  (it resolves timezone, locale and WebRTC from the proxy exit); on
+  CloakBrowser set them explicitly or pass `geoip=True` with the geoip extra.
+
+## Engine rules
+
+- Default to Camoufox: proven against DataDome on first try (2026-11-11),
+  open source, no licence seat, free concurrency. Reach for CloakBrowser only
+  when a target specifically defeats Firefox fingerprints.
+- Camoufox launch that passed: `Camoufox(headless=True, geoip=True,
+  humanize=True, proxy=STICKY)`. Keep canvas/WebGL noise on (the LeakWarning
+  is expected); do not pass `canvas_noise=False` to silence it.
+- On Camoufox you can run many browsers in parallel, but each must have its
+  own sticky proxy session — sharing one session across browsers spends the
+  IP's reputation collectively.
 
 ## Behaviour rules
 
@@ -52,9 +65,7 @@ was learned by breaking. When you write or modify a crawler here:
 
 - Keep crawlers in the template shape: probe → fetch loop → store → resume,
   with the wall handling in one place (`wait_self_clear`). Do not add
-  concurrency on CloakBrowser (one licence seat); on Camoufox, scale browsers
-  only with separate sticky proxy sessions — never share one session across
-  browsers, or the IP's reputation gets spent by all of them at once.
+  concurrency beyond one browser per sticky proxy session.
 - Store fetched bytes content-addressed by SHA-256 and log one JSON line per
   attempt to `captures.jsonl` — resume and audits depend on it.
 - Secrets (proxy credentials, licence keys) only via environment variables or
