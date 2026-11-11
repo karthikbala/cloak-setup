@@ -10,6 +10,7 @@ is something that broke once and was fixed.
 | `cloak_setup.sh` | One-command installer for a fresh Ubuntu/Debian server. Idempotent. |
 | `mini_crawler.py` | CloakBrowser template: probe → self-clear → fetch → store → resume. Strongest single-browser stealth; needs a (free) key. |
 | `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit. **Verified live vs CanLII/DataDome 2026-11-11**: wall self-cleared in ~8s, 3/3 documents, zero mid-run walls. |
+| `replay_crawler.py` | API replay twin: mint once, then POST a job list with in-page `fetch()` through the same session. **Verified live vs Expedia/DataDome 2026-11-11**: 100s of priced responses at 200 on IPs where every `curl_cffi` replay was denied. |
 | `AGENTS.md` | **For coding agents**: the rules that keep a crawler unblocked. Read before writing code here. |
 
 ## Quickstart on a new server
@@ -45,7 +46,11 @@ both — that is where the blocking game is actually decided.
    judges the exit IP's reputation more than the browser. DataImpulse form:
    `http://USER__cr.ca;sessid.SESSIONID:PASS@gw.dataimpulse.com:823`. Once a
    session id lands on a clean IP, reuse it; fresh random sessions are a
-   lottery, and a burned IP cannot be fixed by any browser version.
+   lottery, and a burned IP cannot be fixed by any browser version. But
+   re-validate before reuse: DataImpulse sticky pins were observed rotating to
+   a different IP in under an hour (2 of 3 pins moved in one hour), which
+   silently breaks cookie/IP binding. A cheap `ipinfo.io` lookup through the
+   proxy before launch catches it.
 3. **Never lower the pace.** 4s between fetches was tolerated; faster gets
    rate-flagged mid-run.
 4. **Walls clear themselves — wait, don't hammer.** DataDome's device-check
@@ -69,10 +74,39 @@ both — that is where the blocking game is actually decided.
 - **DataDome blocks are mostly IP reputation** (their maintainers say the
   same): one known-good sticky session beats everything else you can tune.
 
+## Replaying API calls (Expedia/DataDome, measured 2026-11-11)
+
+For targets where the data lives behind an API the page calls (a GraphQL
+search feed, a JSON endpoint), do not replay that API from a plain HTTP
+client — replay it **inside the page**:
+
+1. Mint the session in a real browser (probe the site, let any wall
+   self-clear), with a request listener capturing the exact API request the
+   page makes: URL, headers and body.
+2. Fire each job with `page.evaluate(fetch(...))` on the same origin,
+   `credentials: 'include'`, replaying the captured headers (minus forbidden
+   ones: host, content-length, cookie, origin, referer, user-agent).
+3. Replaying with only `content-type` was rejected with 403 — the captured
+   headers are part of what the edge accepts. A 429 burns the session; stop
+   and resample rather than hammering.
+
+Measured on Expedia: ~100 LodgingCard results per request in ~2s, 100% at
+200, on the same sticky IPs where `curl_cffi` — with a perfect Chrome TLS
+fingerprint — was denied every time with a DataDome challenge page.
+
+**Curl replay acceptance is per provider pool and drifts over time.** The
+same Expedia replay that returned 200 through one residential provider in
+early November was hard-denied through another days later — chrome and
+firefox TLS profiles alike. If a curl replay worked last week, re-verify it
+before building on it; the browser-side pattern above is the one that held.
+
 ## What does NOT work (measured 2026-11-10/11)
 
 - **Plain HTTP clients, always** — 403 with a perfect Chrome TLS fingerprint
   (`curl_cffi`), even through residential proxies. A real browser is required.
+  Caveat learned later on Expedia: a curl replay can work from one residential
+  provider pool and be hard-denied from another days later — never build a
+  pipeline on it. See "Replaying API calls" below for the pattern that held.
 - **2Captcha / Capsolver for DataDome** — their workers solve from their own
   pool and ignore the user-supplied proxy, so the returned cookie is bound to
   the wrong IP and never clears. Self-clearing replaced it entirely.
