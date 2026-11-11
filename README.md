@@ -8,17 +8,29 @@ is something that broke once and was fixed.
 | File | What it is |
 |---|---|
 | `cloak_setup.sh` | One-command installer for a fresh Ubuntu/Debian server. Idempotent. |
-| `mini_crawler.py` | A ~120-line crawler template: probe → self-clear → fetch → store → resume. |
+| `mini_crawler.py` | CloakBrowser template: probe → self-clear → fetch → store → resume. Strongest single-browser stealth; needs a (free) key. |
+| `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit, concurrency free. |
 | `AGENTS.md` | **For coding agents**: the rules that keep a crawler unblocked. Read before writing code here. |
 
 ## Quickstart on a new server
 
 ```sh
 sudo ./cloak_setup.sh                 # deps, fonts, venv, diagnostics
+
+# Engine A: CloakBrowser (strongest Chromium stealth, free key, 1 browser)
 export CLOAKBROWSER_LICENSE_KEY=...   # free key: https://cloakbrowser.dev/free
 cp mini_crawler.py my_crawler.py      # then edit TARGET / URLS / storage
-python3 my_crawler.py
+
+# Engine B: Camoufox (open source, no key, unlimited browsers)
+/opt/cloak/venv/bin/pip install 'camoufox[geoip]'
+/opt/cloak/venv/bin/camoufox fetch
+python3 -m playwright install-deps firefox
+cp camoufox_crawler.py my_crawler.py
 ```
+
+Pick by need: one hardened browser → CloakBrowser; many browsers or no
+vendor key → Camoufox. The proxy, pacing and wall rules are identical for
+both — that is where the blocking game is actually decided.
 
 ## The five rules (each one cost us a debugging session)
 

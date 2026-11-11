@@ -47,6 +47,12 @@ python3 -m venv /opt/cloak/venv 2>/dev/null || true
 /opt/cloak/venv/bin/pip install -q --upgrade cloakbrowser
 /opt/cloak/venv/bin/python -c "import cloakbrowser; print('   cloakbrowser OK')"
 
+echo "== 4b. Camoufox engine (open source, optional) =="
+# No licence, no seat limit. The Firefox binary downloads on `camoufox fetch`.
+/opt/cloak/venv/bin/pip install -q 'camoufox[geoip]' || true
+/opt/cloak/venv/bin/python -m playwright install-deps firefox 2>/dev/null || true
+/opt/cloak/venv/bin/camoufox fetch && echo "   camoufox OK" || echo "   camoufox fetch skipped (run later: /opt/cloak/venv/bin/camoufox fetch)"
+
 echo "== 5. Licence =="
 # Every launch needs a key; one concurrent browser per seat. A crashed run holds
 # its seat ~4 minutes — retry with backoff instead of failing.

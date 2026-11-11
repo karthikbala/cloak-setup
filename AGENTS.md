@@ -50,9 +50,11 @@ was learned by breaking. When you write or modify a crawler here:
 
 ## Code rules
 
-- Keep crawlers in the `mini_crawler.py` shape: probe → fetch loop → store →
-  resume, with the wall handling in one place (`wait_self_clear`). Do not add
-  concurrency; the licence allows one browser and the pace is deliberate.
+- Keep crawlers in the template shape: probe → fetch loop → store → resume,
+  with the wall handling in one place (`wait_self_clear`). Do not add
+  concurrency on CloakBrowser (one licence seat); on Camoufox, scale browsers
+  only with separate sticky proxy sessions — never share one session across
+  browsers, or the IP's reputation gets spent by all of them at once.
 - Store fetched bytes content-addressed by SHA-256 and log one JSON line per
   attempt to `captures.jsonl` — resume and audits depend on it.
 - Secrets (proxy credentials, licence keys) only via environment variables or
