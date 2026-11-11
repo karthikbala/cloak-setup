@@ -106,7 +106,23 @@ def main():
         if not wait_self_clear(page, TARGET):
             raise SystemExit("blocked at probe — stop, do not hammer")
 
-        for url in URLS:
+        sessid = os.environ.get("DATAIMPULSE_SESSID", "0123abcd")
+    for attempt in range(1, 6):
+        proxy = {
+            "server": "http://gw.dataimpulse.com:823",
+            "username": f"{os.environ.get('DATAIMPULSE_USER', 'USER')}__cr.ca;sessid.{sessid}",
+            "password": os.environ.get("DATAIMPULSE_PASS", "PASS"),
+        }
+        with Camoufox(headless=True, geoip=True, humanize=True, proxy=proxy) as browser:
+            page = browser.new_page()
+            if wait_self_clear(page, TARGET):
+                break
+            print(f"[probe] blocked (draw {attempt}) — redrawing session", flush=True)
+            sessid = os.urandom(5).hex()
+    else:
+        raise SystemExit("5 burned draws in a row — the proxy pool is hostile; stop")
+
+    for url in URLS:
             if url in seen:
                 continue
             res = fetch_js(page, url)

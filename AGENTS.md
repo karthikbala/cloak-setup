@@ -40,9 +40,14 @@ was learned by breaking. When you write or modify a crawler here:
 - Camoufox launch that passed: `Camoufox(headless=True, geoip=True,
   humanize=True, proxy=STICKY)`. Keep canvas/WebGL noise on (the LeakWarning
   is expected); do not pass `canvas_noise=False` to silence it.
-- On Camoufox you can run many browsers in parallel, but each must have its
-  own sticky proxy session — sharing one session across browsers spends the
-  IP's reputation collectively.
+- A fresh session id is a draw from the IP lottery: measured 2026-11-11 with
+  5 parallel browsers on 5 fresh draws, only 3 passed the probe — the others
+  redrew new sessions and passed within 1-3 redraws. Build the redraw in
+  (see the template's probe loop); never hammer a burned IP.
+- Parallel scale test on the same date: 5 browsers × 20 documents sustained
+  with zero mid-run walls, 100 decisions in ~5 minutes wall time. Each
+  browser must have its own sticky proxy session — sharing one session
+  across browsers spends the IP's reputation collectively.
 
 ## Behaviour rules
 
