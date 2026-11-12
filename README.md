@@ -8,9 +8,10 @@ is something that broke once and was fixed.
 | File | What it is |
 |---|---|
 | `cloak_setup.sh` | One-command installer for a fresh Ubuntu/Debian server. Idempotent. |
-| `mini_crawler.py` | CloakBrowser template: probe → self-clear → fetch → store → resume. Strongest single-browser stealth; needs a (free) key. |
-| `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit. **Verified live vs CanLII/DataDome 2026-11-11**: wall self-cleared in ~8s, 3/3 documents, zero mid-run walls. |
+| `mini_crawler.py` | CloakBrowser template: probe → self-clear → fetch → store → resume, with session redraw on burnout and planned rotation. Strongest single-browser stealth; needs a (free) key. |
+| `camoufox_crawler.py` | Same skeleton on **Camoufox** — open-source stealth Firefox, no key, no seat limit. **Verified at scale vs CanLII/DataDome 2026-11-11/12**: 1000 documents, 5 parallel browsers, session rotation + redraw. |
 | `replay_crawler.py` | API replay twin: mint once, then POST a job list with in-page `fetch()` through the same session. **Verified live vs Expedia/DataDome 2026-11-11**: 100s of priced responses at 200 on IPs where every `curl_cffi` replay was denied. |
+| `run_parallel.sh` | N-worker fan-out with a per-worker supervisor; feeds each worker a CHUNK url file and its own sticky session. |
 | `AGENTS.md` | **For coding agents**: the rules that keep a crawler unblocked. Read before writing code here. |
 
 ## Quickstart on a new server
@@ -42,23 +43,35 @@ both — that is where the blocking game is actually decided.
    a real Mac's `/System/Library/Fonts`. Fonts must live in a fontconfig path
    (`/usr/local/share/fonts/...`) — a random directory is never scanned.
    Diagnose with `cloakbrowser info`.
-2. **One sticky residential session per run — and keep a good one.** DataDome
+2. **One sticky residential session per run — and rotate it before it burns.** DataDome
    judges the exit IP's reputation more than the browser. DataImpulse form:
    `http://USER__cr.ca;sessid.SESSIONID:PASS@gw.dataimpulse.com:823`. Once a
    session id lands on a clean IP, reuse it; fresh random sessions are a
-   lottery, and a burned IP cannot be fixed by any browser version. But
-   re-validate before reuse: DataImpulse sticky pins were observed rotating to
-   a different IP in under an hour (2 of 3 pins moved in one hour), which
-   silently breaks cookie/IP binding. A cheap `ipinfo.io` lookup through the
-   proxy before launch catches it.
+   lottery (measured pass rate ~3/5), and a burned IP cannot be fixed by any
+   browser version. But sessions also *age out under load*: in the 1000-doc
+   run, all five workers hit walls at ~60 docs per session. Rotate the
+   session every ~40 docs (templates: `ROTATE_EVERY`) and mid-run walls
+   mostly disappear. Re-validate a reused pin first: DataImpulse sticky pins
+   were observed rotating to a different IP in under an hour (2 of 3 pins
+   moved in one hour), which silently breaks cookie/IP binding. A cheap
+   `ipinfo.io` lookup through the proxy before launch catches it.
 3. **Never lower the pace.** 4s between fetches was tolerated; faster gets
    rate-flagged mid-run.
-4. **Walls clear themselves — wait, don't hammer.** DataDome's device-check
-   interstitial passes on its own in a real browser on a residential IP:
-   render it and wait up to ~45s, cool down 20s, continue. Hammering burns the
-   IP. Capped recoveries per run; a wall that never clears means stop.
+4. **Walls clear themselves — and when one doesn't, redraw, don't die.** DataDome's
+   device-check interstitial passes on its own in a real browser on a
+   residential IP: render it and wait up to ~45s, cool down 20s, continue
+   once. If it still hasn't cleared, the session is burned: redraw the
+   session (90s cooldown) and resume from `captures.jsonl` — the completed
+   work is never repeated and none is lost. Do not hammer the same identity
+   and do not treat a stubborn wall as fatal: in the completion run every
+   worker needed one redraw, and a chunk that redraws kept going to 89 docs.
 5. **Quit the browser cleanly.** A killed browser holds its licence seat for
    ~4 minutes; one concurrent browser per licence.
+6. **Fan out under a supervisor.** At 5+ workers, something always exits:
+   crashes, draw exhaustion, a hostile proxy pool. Give each worker its own
+   chunk (`CHUNK` env) and sticky session, and relaunch a dead worker once
+   after a cooldown (`run_parallel.sh`). The resume-from-captures design
+   makes relaunches free — in the completion run, 2 of 5 chunks needed one.
 
 ## Engine notes (measured)
 
@@ -68,11 +81,18 @@ both — that is where the blocking game is actually decided.
   mid-run on the identical session. Launch config that passed: `headless=True,
   geoip=True, humanize=True` + the sticky proxy. Keep the canvas/WebGL noise
   the `LeakWarning` tells you about — it is intended and passed as-is.
+- **At scale (1000 decisions, 5 parallel browsers, 2026-11-11/12)** the wall
+  picture changed: all workers eventually hit mid-run walls at ~60 docs per
+  session, and one chunk lost the fresh-draw lottery 5 times in a row. The
+  fixes that completed the run — rotation every 40 docs, redraw-on-stubborn-
+  wall with resume, MAX_DRAWS=8, supervised relaunch — are what the templates
+  now encode. Walls are a session-ageing signal, not a target signal.
 - **CloakBrowser** hit mid-run walls on the same session that Camoufox did
   not; both cleared by waiting. Prefer Camoufox as the default engine; keep
   CloakBrowser for targets that specifically defeat Firefox fingerprints.
 - **DataDome blocks are mostly IP reputation** (their maintainers say the
-  same): one known-good sticky session beats everything else you can tune.
+  same): one known-good sticky session beats everything else you can tune —
+  and reputation degrades under load, hence rotation.
 
 ## Replaying API calls (Expedia/DataDome, measured 2026-11-11)
 
